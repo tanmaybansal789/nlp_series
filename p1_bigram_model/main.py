@@ -18,16 +18,6 @@ class Encoder:
     def n_vocab(self):
         return len(self.decoder)
 
-        import torch
-from torch import nn
-from torch.nn import functional as F
-
-import numpy as np
-import pandas as pd
-
-from dataclasses import dataclass
-
-
 # text <-> tokens
 class Encoder:
     def __init__(self, text):
