@@ -66,7 +66,7 @@ class BigramModel(nn.Module):
             logits = self(idx)
             # only get the last element in the time dimension
             logits = logits[:, -1, :]
-            # softmax by squishing the channel dimension - for bigram, T == C
+            # softmax across channel dimension - for bigram, vocab_size == C
             probs = F.softmax(logits, dim=-1)
             # 1 random sample using this generated probability distribution
             idx_next = torch.multinomial(probs, 1)
@@ -97,3 +97,80 @@ def train_bigram(model, train_data, batch_size=32, n_steps=10000):
 
         if step % 1000 == 0:
             print(f'{step}: loss={loss.item()}')
+
+def visualise(embedding_matrix, vocab):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.colors import TwoSlopeNorm
+
+    W = embedding_matrix.detach()  # shape (65, 65)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    norm = TwoSlopeNorm(
+        vmin=W.min(),
+        vcenter=0.0,
+        vmax=W.max()
+    )
+
+    im = ax.imshow(
+        W,
+        cmap="coolwarm",   # diverging colormap
+        norm=norm
+    )
+
+    # Axis labels
+    ax.set_xticks(range(len(vocab)))
+    ax.set_yticks(range(len(vocab)))
+    ax.set_xticklabels(vocab, fontsize=8)
+    ax.set_yticklabels(vocab, fontsize=8)
+
+    ax.set_xlabel("Next character")
+    ax.set_ylabel("Previous character")
+
+    # Rotate x labels
+    plt.setp(ax.get_xticklabels(), rotation=90)
+
+    # Colorbar
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label("Weight / Logit value")
+
+    plt.tight_layout()
+    plt.savefig('p1_bigram_model/bigram_weights.png')
+    plt.show()
+
+def find_hotspots(embedding_matrix, encoder):
+    import heapq
+    
+    top = []
+    low = []
+
+    for i in range(encoder.n_vocab):
+        for j in range(encoder.n_vocab):
+            heapq.heappush(top, (embedding_matrix[i, j], encoder.decoder[i], encoder.decoder[j]))
+            heapq.heappush(low, (-embedding_matrix[i, j], encoder.decoder[i], encoder.decoder[j]))
+
+    print('Lowest weighted pairs')
+    for n in range(1, 20):
+        print(f'#{n}: {heapq.heappop(top)[1:]}')
+    
+    print('Highest weighted pairs')
+    for n in range(1, 20):
+        print(f'#{n}: {heapq.heappop(low)[1:]}')
+    
+# entry point
+if __name__ == '__main__':
+    # load text and build encoder
+    text = open('p1_bigram_model/input.txt').read()
+    encoder = Encoder(text)
+    data = torch.tensor(encoder.encode(text), dtype=torch.long)
+    train_data, val_data = train_val_split(data, 0.8)
+
+    model = BigramModel(len(encoder.decoder))
+    train_bigram(model, train_data)
+
+    print(encoder.decode((model.generate(torch.zeros((1, 1), dtype=torch.long)).tolist())[0]))
+
+    visualise(model.embed.weight, encoder.decoder)
+
+    find_hotspots(model.embed.weight, encoder)
